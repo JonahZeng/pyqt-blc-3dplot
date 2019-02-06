@@ -1,10 +1,12 @@
 # _*_ encoding=utf-8 _*_
 import sys
-from PyQt5.QtWidgets import QMainWindow,  QWidget, QApplication,  QMessageBox,  QFileDialog,  QVBoxLayout
+import numpy as np
+from PyQt5.QtWidgets import QMainWindow,  QWidget, QApplication,  QMessageBox,  QFileDialog,  QVBoxLayout,  QDialog
 from PyQt5.QtCore import  QDir
 from PyQt5.QtGui import QFont
 from aboutDlg import aboutDlg
 import rawHandle
+import rawinfoDlg
 
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
@@ -36,8 +38,6 @@ class jonahWidget(QMainWindow):
         vlayout.addWidget(static_canvas,  1)
         self._main.setLayout(vlayout)
         self._static_ax = static_canvas.figure.add_subplot(1, 1, 1,  projection='3d')
-#        t = np.linspace(0, 10, 501)
-#        self._static_ax.plot(t, np.tan(t), ".")
         
         screenInfo = QApplication.desktop()
         screenIdx = screenInfo.screenNumber()#current screen index
@@ -84,11 +84,26 @@ class jonahWidget(QMainWindow):
                 if iso!=iso_fixed:
                     QMessageBox.information(self,  'error',  'ISO in your selected raws are not same',  QMessageBox.Ok)
                     return
-        #TODO: add rawinfo dlg
-        data = rawHandle.handle(open_files[0],  'BG', 5120,  3840,  12)
-        if data==None:
-            QMessageBox.information(self,  'error',  'raw handle result error',  QMessageBox.Ok)
- 
+        infoDlg = rawinfoDlg.RawinfoDlg()
+        reply = infoDlg.exec_()
+        if reply == QDialog.Accepted:
+            try:
+                data = rawHandle.handle(open_files[0],  infoDlg.bayer,  infoDlg.rawWidth,  infoDlg.rawHeight,  infoDlg.bitDepth)
+                if data==None:
+                    QMessageBox.information(self,  'error',  'raw handle result error',  QMessageBox.Ok)
+                    return
+                h,  w = data[0].shape
+                h = np.arange(0,  h)
+                w = np.arange(0,  w)
+                h,  w = np.meshgrid(w, h)
+                print(data[0].shape,  h.shape,  w.shape)
+                self._static_ax.plot_surface(h,  w,  data[0],  cmap=cm.coolwarm, linewidth=0, antialiased=False)
+                self._static_ax.set_zlim([128,  384])
+                self._static_ax.set_xlim([0,  160])
+                self._static_ax.set_ylim([0,  120])
+            except ValueError as ve:
+                print(ve)
+
 if __name__ == '__main__':     
     app = QApplication(sys.argv)
     app.setFont(QFont("Microsoft YaHei UI", 10))
