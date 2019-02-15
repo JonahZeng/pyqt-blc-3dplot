@@ -6,8 +6,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
 
 class RawinfoDlg(QDialog):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent):
+        super().__init__(parent)
         self.bayer = 'None'
         self.rawWidth = 0
         self.rawHeight = 0
