@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE Project SYSTEM "Project-5.1.dtd">
 <!-- eric project file for project learn_pyqt5 -->
-<!-- Saved: 2019-02-06, 21:32:30 -->
+<!-- Saved: 2019-02-17, 23:51:21 -->
 <!-- Copyright (C) 2019 zengyangqiao, zengyangqiao@huawei.com -->
 <Project version="5.1">
   <Language>en_US</Language>
@@ -16,6 +16,7 @@
   <Sources>
     <Source>aboutDlg.py</Source>
     <Source>main_window.py</Source>
+    <Source>matplotlib_cm.py</Source>
     <Source>matplotlib_embed_qt.py</Source>
     <Source>rawHandle.py</Source>
     <Source>rawinfoDlg.py</Source>

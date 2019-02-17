@@ -1,7 +1,8 @@
 # _*_ encoding=utf-8 _*_
 import sys
 import numpy as np
-from PyQt5.QtWidgets import QMainWindow, QWidget, QApplication, QMessageBox, QFileDialog, QVBoxLayout, QDialog
+from PyQt5.QtWidgets import QMainWindow, QWidget, QApplication, QMessageBox, QFileDialog, QHBoxLayout, QVBoxLayout,  QDialog, \
+    QComboBox,  QLabel,  QGroupBox,  QGridLayout,  QRadioButton
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QFont
 from aboutDlg import aboutDlg
@@ -35,12 +36,41 @@ class jonahWidget(QMainWindow):
         aboutThisAction.triggered.connect(self.onAboutThisAction)
         self._main = QWidget(self)
         self.setCentralWidget(self._main)
-        vlayout = QVBoxLayout()
+        mainLayout = QHBoxLayout()
         self.static_canvas = FigureCanvas(Figure(figsize=(5, 3)))
         self.addToolBar(Qt.BottomToolBarArea, NavigationToolbar(self.static_canvas, self))
-        vlayout.addWidget(self.static_canvas,  1)
-        self._main.setLayout(vlayout)
         self._static_ax = self.static_canvas.figure.add_subplot(1, 1, 1,  projection='3d')
+        mainLayout.addWidget(self.static_canvas,  1)
+        
+        midLayout = QVBoxLayout()
+        
+        showBayerChannelGroup = QGroupBox('show which channel')
+        channelLayout = QGridLayout()
+        self.r_radioBtn = QRadioButton('r',  showBayerChannelGroup)
+        self.gr_radioBtn = QRadioButton('gr',  showBayerChannelGroup)
+        self.gb_radioBtn = QRadioButton('gb',  showBayerChannelGroup)
+        self.b_radioBtn = QRadioButton('b',  showBayerChannelGroup)
+        channelLayout.addWidget(self.r_radioBtn,  0,  0,  1,  1)
+        channelLayout.addWidget(self.gr_radioBtn,  0,  1,  1,  1)
+        channelLayout.addWidget(self.gb_radioBtn,  1,  0,  1,  1)
+        channelLayout.addWidget(self.b_radioBtn,  1,  1,  1,  1)
+        self.r_radioBtn.setChecked(True)
+        showBayerChannelGroup.setLayout(channelLayout)
+        midLayout.addWidget(showBayerChannelGroup)
+        
+        colorThemeLayout = QHBoxLayout()
+        colorThemeLabel = QLabel('color theme')
+        self.colorThemeComBox = QComboBox()
+        self.colorThemeComBox.setEditable(False)
+        cmap= ['PiYG', 'PRGn', 'BrBG', 'PuOr', 'RdGy', 'RdBu','RdYlBu', 'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic']
+        self.colorThemeComBox.addItems(cmap)
+        colorThemeLayout.addWidget(colorThemeLabel)
+        colorThemeLayout.addWidget(self.colorThemeComBox)
+        self.colorThemeComBox.currentIndexChanged[str].connect(self.changeColorMap)
+        midLayout.addLayout(colorThemeLayout)
+        mainLayout.addLayout(midLayout)
+        midLayout.addStretch(2)
+        self._main.setLayout(mainLayout)
         
         screenInfo = QApplication.desktop()
         screenIdx = screenInfo.screenNumber()#current screen index
@@ -90,27 +120,46 @@ class jonahWidget(QMainWindow):
         reply = infoDlg.exec_()
         if reply == QDialog.Accepted:
             try:
-                data = rawHandle.handle(open_files[0],  infoDlg.bayer,  infoDlg.rawWidth,  infoDlg.rawHeight,  infoDlg.bitDepth)
-                if data==None:
+                self.data = rawHandle.handle(open_files[0],  infoDlg.bayer,  infoDlg.rawWidth,  infoDlg.rawHeight,  infoDlg.bitDepth)
+                if self.data==None:
                     QMessageBox.information(self,  'error',  'raw handle result error',  QMessageBox.Ok)
                     return
 
-                h,  w = data[0].shape
+                whichChannel = -1
+                channelStr = ''
+                if self.r_radioBtn.isChecked():
+                    whichChannel = 0
+                    channelStr = 'R'
+                elif self.gr_radioBtn.isChecked():
+                    whichChannel = 1
+                    channelStr = 'Gr'
+                elif self.gb_radioBtn.isChecked():
+                    whichChannel = 2
+                    channelStr = 'Gb'
+                else:
+                    whichChannel = 3
+                    channelStr = 'B'
+                colorStr = self.colorThemeComBox.currentText()
+                h,  w = self.data[0].shape
                 h = np.arange(0,  h)
                 w = np.arange(0,  w)
                 h,  w = np.meshgrid(w, h)
                 self._static_ax.clear()
-                z_max = np.max(data[0])
-                z_min = np.min(data[0])
+                z_max = np.max(self.data[whichChannel])
+                z_min = np.min(self.data[whichChannel])
                 self._static_ax.set_zlim([z_min-10,  z_max+10])
-                #self._static_ax.set_xlim([0,  160])
                 self._static_ax.set_ylim([h.shape[0],  0])
-                self.surface = self._static_ax.plot_surface(h,  w,  data[0],  cmap=cm.coolwarm, linewidth=1, antialiased=True)
+                self.surface = self._static_ax.plot_surface(h,  w, self.data[whichChannel],  cmap=cm.get_cmap(colorStr), linewidth=0, antialiased=True)
+                self._static_ax.set_title(channelStr + ' channel 3d plot')
                 self.static_canvas.figure.colorbar(self.surface,  pad=0.15,  shrink=0.5,  aspect=10)
                 self._static_ax.figure.canvas.draw()
                 self.repaint()
             except ValueError as ve:
                 print(ve)
+    
+    def changeColorMap(self,  colorMap:str):
+        print(isinstance(colorMap,  str))
+        print(colorMap)
 
 if __name__ == '__main__':     
     app = QApplication(sys.argv)
