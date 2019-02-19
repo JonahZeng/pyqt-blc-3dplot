@@ -1,13 +1,14 @@
 # _*_ encoding=utf-8 _*_
 import sys
 import numpy as np
-from PyQt5.QtWidgets import QMainWindow, QWidget, QApplication, QMessageBox, QFileDialog, QHBoxLayout, QVBoxLayout,  QDialog, \
-    QComboBox,  QLabel,  QGroupBox,  QGridLayout,  QRadioButton
-from PyQt5.QtCore import QDir, Qt
+from PyQt5.QtWidgets import QMainWindow, QWidget, QApplication, QMessageBox, QFileDialog, QHBoxLayout, QVBoxLayout, QDialog, \
+    QComboBox, QLabel, QGroupBox, QGridLayout, QRadioButton, QPushButton
+from PyQt5.QtCore import QDir, QFileInfo #Qt
 from PyQt5.QtGui import QFont
 from aboutDlg import aboutDlg
 import rawHandle
 import rawinfoDlg
+import showBlcDataDlg
 
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.backends.backend_qt5agg import  NavigationToolbar2QT as NavigationToolbar
@@ -21,26 +22,36 @@ from matplotlib import cm
 class jonahWidget(QMainWindow):
      
     def __init__(self):
-        super().__init__()         
+        super().__init__() 
+        self.whichChannel = -1
+        self.channelStr = ''     
+        self.colorMap = ''
+        self.iso_fixed = 50 
+        self.file_size = 0
         self.initUI()
                   
     def initUI(self):          
         self.menuBar = self.menuBar()
         fileMenu = self.menuBar.addMenu('&File')
-        openAction = fileMenu.addAction('open file')
+        openAction = fileMenu.addAction('open raw')
         aboutMenu = self.menuBar.addMenu('&About')
         aboutQtAction = aboutMenu.addAction('about Qt')
         aboutThisAction = aboutMenu.addAction('about ...')
         openAction.triggered.connect(self.onOpenFileAction)
         aboutQtAction.triggered.connect(self.onAboutQtAction)
         aboutThisAction.triggered.connect(self.onAboutThisAction)
+        
+        mainLayout = QHBoxLayout()
+        
+        leftLayout = QVBoxLayout()
         self._main = QWidget(self)
         self.setCentralWidget(self._main)
-        mainLayout = QHBoxLayout()
         self.static_canvas = FigureCanvas(Figure(figsize=(5, 3)))
-        self.addToolBar(Qt.BottomToolBarArea, NavigationToolbar(self.static_canvas, self))
+        #self.addToolBar(Qt.BottomToolBarArea, NavigationToolbar(self.static_canvas, self))
         self._static_ax = self.static_canvas.figure.add_subplot(1, 1, 1,  projection='3d')
-        mainLayout.addWidget(self.static_canvas,  1)
+        leftLayout.addWidget(self.static_canvas,  1)
+        leftLayout.addWidget(NavigationToolbar(self.static_canvas, self._main))
+        mainLayout.addLayout(leftLayout)
         
         midLayout = QVBoxLayout()
         
@@ -55,6 +66,11 @@ class jonahWidget(QMainWindow):
         channelLayout.addWidget(self.gb_radioBtn,  1,  0,  1,  1)
         channelLayout.addWidget(self.b_radioBtn,  1,  1,  1,  1)
         self.r_radioBtn.setChecked(True)
+        self.channelStr = 'R'
+        self.r_radioBtn.toggled.connect(self.onRchannelBtn)
+        self.gr_radioBtn.toggled.connect(self.onGrchannelBtn)
+        self.gb_radioBtn.toggled.connect(self.onGbchannelBtn)
+        self.b_radioBtn.toggled.connect(self.onBchannelBtn)
         showBayerChannelGroup.setLayout(channelLayout)
         midLayout.addWidget(showBayerChannelGroup)
         
@@ -68,8 +84,14 @@ class jonahWidget(QMainWindow):
         colorThemeLayout.addWidget(self.colorThemeComBox)
         self.colorThemeComBox.currentIndexChanged[str].connect(self.changeColorMap)
         midLayout.addLayout(colorThemeLayout)
+        
+        showBlcNumberBtn = QPushButton('show blc data', self)
+        midLayout.addStretch(1)
+        midLayout.addWidget(showBlcNumberBtn)
+        midLayout.addStretch(1)
+        showBlcNumberBtn.clicked.connect(self.onShowBlcData)
+        
         mainLayout.addLayout(midLayout)
-        midLayout.addStretch(2)
         self._main.setLayout(mainLayout)
         
         screenInfo = QApplication.desktop()
@@ -103,20 +125,25 @@ class jonahWidget(QMainWindow):
         if open_files[1]!='raw file(*.raw)':
             QMessageBox.information(self,  'error',  'only raw file can be selected!',  QMessageBox.Ok)
             return
-        iso_fixed = 50
+        
         for idx,  fileName in enumerate(open_files[0]):
             str_list = fileName.split('_')
             if str_list.count('ISO')==0:
                 QMessageBox.information(self,  'error',  'no ISO info in {0}'.format(fileName),  QMessageBox.Ok)
                 return
             iso = int(str_list[str_list.index('ISO')+1])
+            file_size = QFileInfo(fileName).size()
             if idx==0:
-                iso_fixed = iso
+                self.iso_fixed = iso
+                self.file_size = file_size
             else:
-                if iso!=iso_fixed:
+                if iso!=self.iso_fixed:
                     QMessageBox.information(self,  'error',  'ISO in your selected raws are not same',  QMessageBox.Ok)
                     return
-        infoDlg = rawinfoDlg.RawinfoDlg(self)
+                if file_size!=self.file_size:
+                    QMessageBox.information(self,  'error',  'Inconsistent file size !',  QMessageBox.Ok)
+                    return
+        infoDlg = rawinfoDlg.RawinfoDlg(self.file_size, self)
         reply = infoDlg.exec_()
         if reply == QDialog.Accepted:
             try:
@@ -125,41 +152,101 @@ class jonahWidget(QMainWindow):
                     QMessageBox.information(self,  'error',  'raw handle result error',  QMessageBox.Ok)
                     return
 
-                whichChannel = -1
-                channelStr = ''
                 if self.r_radioBtn.isChecked():
-                    whichChannel = 0
-                    channelStr = 'R'
+                    self.whichChannel = 0
+                    self.channelStr = 'R'
                 elif self.gr_radioBtn.isChecked():
-                    whichChannel = 1
-                    channelStr = 'Gr'
+                    self.whichChannel = 1
+                    self.channelStr = 'Gr'
                 elif self.gb_radioBtn.isChecked():
-                    whichChannel = 2
-                    channelStr = 'Gb'
+                    self.whichChannel = 2
+                    self.channelStr = 'Gb'
                 else:
-                    whichChannel = 3
-                    channelStr = 'B'
-                colorStr = self.colorThemeComBox.currentText()
-                h,  w = self.data[0].shape
+                    self.whichChannel = 3
+                    self.channelStr = 'B'
+                self.colorMap = self.colorThemeComBox.currentText()
+                h,  w = self.data[self.whichChannel].shape
                 h = np.arange(0,  h)
                 w = np.arange(0,  w)
                 h,  w = np.meshgrid(w, h)
                 self._static_ax.clear()
-                z_max = np.max(self.data[whichChannel])
-                z_min = np.min(self.data[whichChannel])
+                if hasattr(self,  'colorBar'):
+                    self.colorBar.remove()
+                z_max = np.max(self.data[self.whichChannel])
+                z_min = np.min(self.data[self.whichChannel])
                 self._static_ax.set_zlim([z_min-10,  z_max+10])
                 self._static_ax.set_ylim([h.shape[0],  0])
-                self.surface = self._static_ax.plot_surface(h,  w, self.data[whichChannel],  cmap=cm.get_cmap(colorStr), linewidth=0, antialiased=True)
-                self._static_ax.set_title(channelStr + ' channel 3d plot')
-                self.static_canvas.figure.colorbar(self.surface,  pad=0.15,  shrink=0.5,  aspect=10)
+                self.surface = self._static_ax.plot_surface(h,  w, self.data[self.whichChannel],  cmap=cm.get_cmap(self.colorMap), linewidth=0, antialiased=True)
+                self._static_ax.set_title('ISO '+str(self.iso_fixed)+' '+self.channelStr+' channel 3d plot')
+                self.colorBar = self.static_canvas.figure.colorbar(self.surface,  pad=0.15,  shrink=0.5,  aspect=10)
                 self._static_ax.figure.canvas.draw()
                 self.repaint()
             except ValueError as ve:
                 print(ve)
     
     def changeColorMap(self,  colorMap:str):
-        print(isinstance(colorMap,  str))
-        print(colorMap)
+        self.colorMap = colorMap
+        self._static_ax.clear()
+        if hasattr(self,  'colorBar'):
+            self.colorBar.remove()
+        h,  w = self.data[self.whichChannel].shape
+        h = np.arange(0,  h)
+        w = np.arange(0,  w)
+        h,  w = np.meshgrid(w, h)
+        z_max = np.max(self.data[self.whichChannel])
+        z_min = np.min(self.data[self.whichChannel])
+        self._static_ax.set_zlim([z_min-10,  z_max+10])
+        self._static_ax.set_ylim([h.shape[0],  0])
+        self.surface = self._static_ax.plot_surface(h,  w, self.data[self.whichChannel],  cmap=cm.get_cmap(self.colorMap), linewidth=0, antialiased=True)
+        self._static_ax.set_title('ISO '+str(self.iso_fixed)+' '+self.channelStr+' channel 3d plot')
+        self.colorBar = self.static_canvas.figure.colorbar(self.surface,  pad=0.15,  shrink=0.5,  aspect=10)
+        self._static_ax.figure.canvas.draw()
+        self.repaint()
+        
+    def onRchannelBtn(self,  checked:bool):
+        self.channelStr = 'R'
+        self.whichChannel = 0
+        self.__flushAxes()
+        
+    def onGrchannelBtn(self,  checked:bool):
+        self.channelStr = 'Gr'
+        self.whichChannel = 1
+        self.__flushAxes()
+        
+    def onGbchannelBtn(self,  checked:bool):
+        self.channelStr = 'Gb'
+        self.whichChannel = 2
+        self.__flushAxes()
+        
+    def onBchannelBtn(self,  checked:bool):
+        self.channelStr = 'B'
+        self.whichChannel = 3
+        self.__flushAxes()
+
+    def __flushAxes(self):
+        self._static_ax.clear()
+        if hasattr(self,  'colorBar'):
+            self.colorBar.remove()
+        h,  w = self.data[self.whichChannel].shape
+        h = np.arange(0,  h)
+        w = np.arange(0,  w)
+        h,  w = np.meshgrid(w, h)
+        z_max = np.max(self.data[self.whichChannel])
+        z_min = np.min(self.data[self.whichChannel])
+        self._static_ax.set_zlim([z_min-10,  z_max+10])
+        self._static_ax.set_ylim([h.shape[0],  0])
+        self.surface = self._static_ax.plot_surface(h,  w, self.data[self.whichChannel],  cmap=cm.get_cmap(self.colorMap), linewidth=0, antialiased=True)
+        self._static_ax.set_title('ISO '+str(self.iso_fixed)+' '+self.channelStr+' channel 3d plot')
+        self.colorBar = self.static_canvas.figure.colorbar(self.surface,  pad=0.15,  shrink=0.5,  aspect=10)
+        self._static_ax.figure.canvas.draw()
+        self.repaint()
+    
+    def onShowBlcData(self):
+        if hasattr(self, 'data') and isinstance(self.data, tuple) and len(self.data)==4:
+            dlg = showBlcDataDlg.ShowBlcDataDlg(self, self.data)
+            dlg.exec_()
+        else:
+            QMessageBox.information(self, 'error', 'have no (enough) data to show', QMessageBox.Ok)
 
 if __name__ == '__main__':     
     app = QApplication(sys.argv)
